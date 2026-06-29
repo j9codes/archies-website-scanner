@@ -715,6 +715,15 @@
       </div>
     </div>
 
+    <!-- Proxy URL -->
+    <div style="margin-top:14px;">
+      <div class="field">
+        <label>Proxy Worker URL <span style="color:var(--accent);font-size:10px;">(required — see setup note below)</span></label>
+        <input type="text" id="proxy-url" placeholder="https://adwatch.yourname.workers.dev" autocomplete="off" />
+        <div class="field-hint">SerpAPI blocks direct browser requests. Deploy the included Worker (30 sec) and paste the URL here. It is saved in your browser.</div>
+      </div>
+    </div>
+
     <!-- Keywords -->
     <div style="margin-top:18px;">
       <div style="font-size:11px;font-family:var(--mono);color:var(--muted);margin-bottom:8px;letter-spacing:.4px;">Keywords to Monitor</div>
@@ -734,11 +743,21 @@
     </div>
   </div>
 
-  <!-- Setup callout shown if no key -->
+  <!-- Setup callout -->
   <div class="setup-callout" id="setup-callout">
-    <strong>Need a SerpAPI key?</strong> Sign up free at <a href="https://serpapi.com" target="_blank">serpapi.com</a> — the free plan gives you 100 searches/month. Each scan uses <strong>keywords × regions</strong> credits. Your key is saved in your browser and never sent anywhere except directly to SerpAPI.
+    <strong>Two-minute setup:</strong>
     <br><br>
-    <strong>Not seeing ads?</strong> Google only shows ads when budgets are active — try scanning during business hours (9am–6pm) in the target region's timezone. You can also test a query directly at <a href="https://serpapi.com/playground" target="_blank">serpapi.com/playground</a> to confirm what's being returned.
+    <strong>1. SerpAPI key</strong> — Sign up free at <a href="https://serpapi.com" target="_blank">serpapi.com</a> (100 searches/month free). Each scan uses <strong>keywords × regions</strong> credits.
+    <br><br>
+    <strong>2. Proxy Worker</strong> — SerpAPI blocks direct browser requests (CORS policy). You need a free <a href="https://workers.cloudflare.com" target="_blank">Cloudflare Worker</a> as a relay. Deploy steps:
+    <ol style="margin:8px 0 0 18px;line-height:2;">
+      <li>Go to <a href="https://dash.cloudflare.com" target="_blank">dash.cloudflare.com</a> → Workers &amp; Pages → Create</li>
+      <li>Click <strong>Deploy &quot;Hello World&quot;</strong>, give it a name (e.g. <code>adwatch</code>), then click <strong>Edit code</strong></li>
+      <li>Replace all the code with the contents of <strong>worker.js</strong> (included alongside this file), then click <strong>Deploy</strong></li>
+      <li>Copy your worker URL (e.g. <code>https://adwatch.yourname.workers.dev</code>) and paste it into the Proxy URL field above</li>
+    </ol>
+    <br>
+    <strong>Not seeing ads?</strong> Google only shows ads when budgets are active — try scanning during business hours (9am–6pm) in the target region's timezone.
   </div>
 
   <!-- Run -->
@@ -842,10 +861,17 @@ function init() {
   const savedDomain = localStorage.getItem('adwatch_own_domain');
   if (savedDomain) document.getElementById('own-domain').value = savedDomain;
 
+  // Restore proxy URL
+  const savedProxy = localStorage.getItem('adwatch_proxy_url');
+  if (savedProxy) document.getElementById('proxy-url').value = savedProxy;
+
   // Listeners
   document.getElementById('api-key').addEventListener('change', onApiKeyChange);
   document.getElementById('own-domain').addEventListener('change', () => {
     localStorage.setItem('adwatch_own_domain', document.getElementById('own-domain').value.trim());
+  });
+  document.getElementById('proxy-url').addEventListener('change', () => {
+    localStorage.setItem('adwatch_proxy_url', document.getElementById('proxy-url').value.trim());
   });
   document.getElementById('kw-input').addEventListener('keydown', e => {
     if (e.key === 'Enter') addKeyword();
@@ -886,7 +912,10 @@ function toggleKeyVisibility() {
 
 async function fetchCredits(apiKey) {
   try {
-    const r = await fetch(`https://serpapi.com/account.json?api_key=${apiKey}`);
+    const proxyUrl = (document.getElementById('proxy-url')?.value || '').trim().replace(/\/+$/, '');
+    const base = proxyUrl || 'https://serpapi.com';
+    const accountPath = proxyUrl ? `${proxyUrl}/account` : `https://serpapi.com/account.json`;
+    const r = await fetch(`${accountPath}?api_key=${apiKey}`);
     if (!r.ok) return;
     const d = await r.json();
     const left = d.plan_searches_left ?? d.searches_left;
@@ -1070,6 +1099,15 @@ async function runScan() {
   if (!apiKey) { alert('Enter your SerpAPI key first.'); return; }
   if (keywords.length === 0) { alert('Add at least one keyword.'); return; }
 
+  const proxyUrl = document.getElementById('proxy-url').value.trim().replace(/\/+$/, '');
+  if (!proxyUrl) {
+    alert('Paste your Cloudflare Worker proxy URL first.
+
+SerpAPI blocks direct browser requests — the proxy is required. See the setup note on the page.');
+    return;
+  }
+  localStorage.setItem('adwatch_proxy_url', proxyUrl);
+
   // Save on scan too
   localStorage.setItem('adwatch_api_key', apiKey);
 
@@ -1103,7 +1141,8 @@ async function runScan() {
         num:      '10',
         api_key:  apiKey,
       });
-      const url = `https://serpapi.com/search.json?${params}`;
+      // Route through proxy — direct serpapi.com calls are blocked by CORS
+      const url = `${proxyUrl}/search?${params}`;
 
       const resp = await fetch(url);
 
@@ -1216,7 +1255,9 @@ async function testApiKey() {
   log('Testing API key…', 'info');
 
   try {
-    const r = await fetch(`https://serpapi.com/account.json?api_key=${apiKey}`);
+    const proxyUrl = (document.getElementById('proxy-url')?.value || '').trim().replace(/\/+$/, '');
+    if (!proxyUrl) { log('✗ Set your Proxy Worker URL first (see setup note)', 'err'); return; }
+    const r = await fetch(`${proxyUrl}/account?api_key=${apiKey}`);
     if (!r.ok) {
       const e = await r.json().catch(()=>({}));
       log(`✗ Key invalid (${r.status}): ${e.error || r.statusText}`, 'err');
@@ -1233,7 +1274,7 @@ async function testApiKey() {
       engine: 'google', q: 'buy shoes', gl: 'au', hl: 'en',
       location: 'Sydney,New South Wales,Australia', device: 'desktop', api_key: apiKey,
     });
-    const r2 = await fetch(`https://serpapi.com/search.json?${params}`);
+    const r2 = await fetch(`${proxyUrl}/search?${params}`);
     const d2 = await r2.json();
     const testAds = [...(d2.ads||[]), ...(d2.top_ads||[]), ...(d2.bottom_ads||[])];
     const keys2 = Object.keys(d2).filter(k => !['search_metadata','search_parameters','search_information'].includes(k));
