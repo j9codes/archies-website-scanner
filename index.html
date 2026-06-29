@@ -1,0 +1,870 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>BrandGuard — Clone & Impersonator Detector</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=Inter:wght@400;500;600;700&display=swap');
+
+  :root {
+    --bg:        #0d1117;
+    --surface:   #161b22;
+    --border:    #21262d;
+    --accent:    #f97316;
+    --accent-dim:#7c3813;
+    --green:     #22c55e;
+    --green-dim: #14532d;
+    --red:       #ef4444;
+    --red-dim:   #7f1d1d;
+    --yellow:    #eab308;
+    --yellow-dim:#713f12;
+    --blue:      #60a5fa;
+    --blue-dim:  #1e3a5f;
+    --purple:    #a78bfa;
+    --purple-dim:#3b2f6e;
+    --text:      #e6edf3;
+    --muted:     #8b949e;
+    --mono:      'IBM Plex Mono', monospace;
+    --sans:      'Inter', sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: var(--sans); min-height: 100vh; }
+
+  header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 16px 32px; border-bottom: 1px solid var(--border);
+    background: var(--surface); position: sticky; top: 0; z-index: 100;
+  }
+  .logo { display: flex; align-items: center; gap: 10px; font-family: var(--mono); font-weight: 600; font-size: 16px; }
+  .logo-dot { width: 10px; height: 10px; background: var(--accent); border-radius: 50%; box-shadow: 0 0 8px var(--accent); animation: pulse 2s ease-in-out infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+  .header-right { display: flex; align-items: center; gap: 12px; }
+  .credits-badge { font-family: var(--mono); font-size: 11px; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 4px 10px; color: var(--muted); }
+
+  main { max-width: 1100px; margin: 0 auto; padding: 28px 24px; display: flex; flex-direction: column; gap: 20px; }
+
+  .panel { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 20px 24px; }
+  .panel-title { font-size: 10px; font-family: var(--mono); letter-spacing: 1.8px; text-transform: uppercase; color: var(--muted); margin-bottom: 14px; }
+
+  .config-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  @media (max-width: 640px) { .config-grid { grid-template-columns: 1fr; } }
+
+  .field label { display: block; font-size: 11px; color: var(--muted); margin-bottom: 5px; font-family: var(--mono); letter-spacing: 0.4px; }
+  .field-hint { font-size: 10px; color: var(--muted); margin-top: 4px; font-family: var(--mono); opacity: 0.7; }
+  .field input { width: 100%; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-family: var(--mono); font-size: 13px; padding: 9px 12px; outline: none; transition: border-color 0.15s; }
+  .field input:focus { border-color: var(--accent); }
+  .field input::placeholder { color: var(--muted); }
+
+  .input-row { display: flex; gap: 8px; }
+  .input-row input { flex: 1; }
+
+  .btn { font-family: var(--mono); font-size: 12px; border: none; border-radius: 7px; padding: 9px 18px; cursor: pointer; transition: opacity .15s; white-space: nowrap; }
+  .btn-primary { background: var(--accent); color: #fff; font-weight: 600; font-size: 13px; padding: 11px 26px; }
+  .btn-primary:hover { opacity: .88; }
+  .btn-primary:disabled { opacity: .35; cursor: not-allowed; }
+  .btn-secondary { background: none; border: 1px solid var(--border); color: var(--muted); }
+  .btn-secondary:hover { border-color: var(--accent); color: var(--accent); }
+  .btn-save { background: var(--accent); color: #fff; font-weight: 600; }
+  .btn-save:hover { opacity: .85; }
+
+  /* Keywords */
+  .kw-tags { display: flex; gap: 7px; flex-wrap: wrap; min-height: 30px; margin-bottom: 8px; }
+  .kw-tag { display: inline-flex; align-items: center; gap: 5px; background: var(--accent-dim); color: var(--accent); border: 1px solid #a0450f44; border-radius: 100px; font-family: var(--mono); font-size: 11px; padding: 3px 10px 3px 12px; }
+  .kw-tag button { background: none; border: none; color: var(--accent); cursor: pointer; font-size: 14px; line-height: 1; padding: 0; opacity: .6; }
+  .kw-tag button:hover { opacity: 1; }
+  .kw-empty { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+
+  /* Regions */
+  .region-list { display: flex; gap: 8px; flex-wrap: wrap; }
+  .region-btn { display: flex; align-items: center; gap: 6px; background: var(--bg); border: 1px solid var(--border); border-radius: 7px; color: var(--muted); font-family: var(--mono); font-size: 11px; padding: 7px 13px; cursor: pointer; transition: all .15s; user-select: none; }
+  .region-btn.active { background: #1a2332; border-color: var(--blue); color: var(--blue); }
+
+  /* Run bar */
+  .run-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .spinner { width: 12px; height: 12px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin .7s linear infinite; display: none; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  #status-text { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+
+  #scan-log { font-family: var(--mono); font-size: 11px; color: var(--muted); background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 10px 14px; line-height: 1.9; max-height: 160px; overflow-y: auto; display: none; margin-top: 12px; }
+  .log-ok   { color: var(--green); }
+  .log-err  { color: var(--red); }
+  .log-info { color: var(--blue); }
+  .log-warn { color: var(--yellow); }
+
+  /* Summary */
+  .summary-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 12px; }
+  @media (max-width: 640px) { .summary-grid { grid-template-columns: 1fr 1fr; } }
+  .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px 18px; }
+  .stat-num  { font-family: var(--mono); font-size: 28px; font-weight: 600; line-height: 1; }
+  .stat-label { font-size: 10px; color: var(--muted); margin-top: 5px; letter-spacing: 0.8px; font-family: var(--mono); }
+  .stat-card.c-red    .stat-num { color: var(--red); }
+  .stat-card.c-yellow .stat-num { color: var(--yellow); }
+  .stat-card.c-blue   .stat-num { color: var(--blue); }
+  .stat-card.c-orange .stat-num { color: var(--accent); }
+
+  /* Filters */
+  .results-header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; margin-bottom: 12px; }
+  .filter-row { display: flex; gap: 6px; flex-wrap: wrap; }
+  .filter-btn { font-family: var(--mono); font-size: 11px; padding: 4px 12px; border-radius: 100px; border: 1px solid var(--border); background: none; color: var(--muted); cursor: pointer; transition: all .12s; }
+  .filter-btn.active { background: var(--accent-dim); border-color: var(--accent); color: var(--accent); }
+
+  /* Result cards */
+  .result-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; margin-bottom: 10px; }
+  .result-card.threat-critical { border-left: 3px solid var(--red); }
+  .result-card.threat-high     { border-left: 3px solid var(--yellow); }
+  .result-card.threat-low      { border-left: 3px solid var(--green); }
+
+  .card-head { display: flex; align-items: flex-start; justify-content: space-between; padding: 14px 18px 10px; gap: 12px; }
+  .card-head-left { flex: 1; min-width: 0; }
+  .card-site-name { font-size: 14px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .card-url { font-family: var(--mono); font-size: 11px; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .card-url a { color: var(--blue); text-decoration: none; }
+  .card-url a:hover { text-decoration: underline; }
+  .card-snippet { padding: 0 18px 10px; font-size: 12px; color: #c9d1d9; line-height: 1.6; }
+
+  .badge-row { display: flex; gap: 5px; align-items: flex-start; flex-shrink: 0; flex-wrap: wrap; justify-content: flex-end; }
+  .badge { font-family: var(--mono); font-size: 10px; font-weight: 600; padding: 3px 8px; border-radius: 100px; letter-spacing: 0.3px; white-space: nowrap; }
+  .badge-sponsored { background: #2d1a00; color: #fb923c; border: 1px solid #7c3813; }
+  .badge-clone     { background: var(--red-dim); color: var(--red); border: 1px solid #7f1d1d; }
+  .badge-squatter  { background: var(--yellow-dim); color: var(--yellow); border: 1px solid #713f12; }
+  .badge-organic   { background: #1a2332; color: var(--blue); border: 1px solid var(--blue-dim); }
+  .badge-region    { background: #1f1a2e; color: var(--purple); border: 1px solid var(--purple-dim); }
+  .badge-pos       { background: #1c1c1c; color: #94a3b8; border: 1px solid #2d3748; }
+
+  /* Signals */
+  .card-signals { padding: 0 18px 10px; display: flex; flex-wrap: wrap; gap: 5px; }
+  .signal { font-size: 11px; font-family: var(--mono); padding: 3px 9px; border-radius: 4px; }
+  .signal.flag { color: var(--red);    border: 1px solid #3d1515; background: #1f1010; }
+  .signal.warn { color: var(--yellow); border: 1px solid #3d3215; background: #1f1c10; }
+  .signal.ok   { color: var(--green);  border: 1px solid #153d1a; background: #101f12; }
+  .signal.info { color: var(--blue);   border: 1px solid #1e3a5f; background: #0f1a2e; }
+
+  /* Expand tabs */
+  .card-expand-row { border-top: 1px solid var(--border); display: flex; }
+  .expand-tab { flex: 1; background: none; border: none; border-right: 1px solid var(--border); color: var(--muted); font-family: var(--mono); font-size: 11px; padding: 7px 12px; cursor: pointer; transition: color .12s, background .12s; text-align: left; }
+  .expand-tab:last-child { border-right: none; }
+  .expand-tab:hover { color: var(--accent); background: #1a1a1a; }
+  .expand-tab.open  { color: var(--accent); background: #1a1010; }
+  .expand-body { display: none; padding: 12px 18px; border-top: 1px solid var(--border); background: #0f1116; }
+  .expand-body.visible { display: block; }
+  .raw-source { font-family: var(--mono); font-size: 11px; color: #7dd3af; background: #0a0d12; border: 1px solid #21262d; border-radius: 6px; padding: 10px; white-space: pre-wrap; word-break: break-all; max-height: 280px; overflow-y: auto; line-height: 1.6; }
+
+  .empty-state { text-align: center; padding: 50px 20px; color: var(--muted); font-family: var(--mono); font-size: 13px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; }
+  .empty-icon { font-size: 32px; margin-bottom: 10px; }
+
+  ::-webkit-scrollbar { width: 5px; height: 5px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo"><div class="logo-dot"></div>BrandGuard</div>
+  <div class="header-right">
+    <div class="credits-badge" id="credits-badge" style="display:none">— credits</div>
+    <div style="font-family:var(--mono);font-size:11px;color:var(--muted)" id="last-scan">Never scanned</div>
+  </div>
+</header>
+
+<main>
+
+  <!-- Config -->
+  <div class="panel">
+    <div class="panel-title">Brand Configuration</div>
+    <div class="config-grid">
+
+      <div class="field">
+        <label>SerpAPI Key</label>
+        <div class="input-row">
+          <input type="password" id="api-key" placeholder="Paste your SerpAPI key…" autocomplete="off" oninput="onKeyInput()" />
+          <button class="btn btn-save" id="save-btn" onclick="saveKey()">Save</button>
+          <button class="btn btn-secondary" onclick="toggleKey()">👁</button>
+        </div>
+        <div class="field-hint" id="key-status">Paste your key and click Save</div>
+      </div>
+
+      <div class="field">
+        <label>Your Brand Domain</label>
+        <input type="text" id="own-domain" placeholder="e.g. archiesfootwear.com.au" oninput="generateQueries()" />
+        <div class="field-hint">The tool will search for sites impersonating this domain</div>
+      </div>
+
+      <div class="field">
+        <label>Brand Name</label>
+        <input type="text" id="brand-name" placeholder="e.g. Archie's Footwear" oninput="generateQueries()" />
+        <div class="field-hint">Used to search for brand mentions and impersonators</div>
+      </div>
+
+      <div class="field">
+        <label>Extra Search Terms <span style="opacity:.5">(optional)</span></label>
+        <input type="text" id="extra-terms" placeholder="e.g. archies, archies sandals" oninput="generateQueries()" />
+        <div class="field-hint">Comma-separated — product names, misspellings, nicknames</div>
+      </div>
+
+    </div>
+
+    <!-- Auto-generated search queries preview -->
+    <div style="margin-top:16px;">
+      <div style="font-size:11px;font-family:var(--mono);color:var(--muted);margin-bottom:8px;letter-spacing:.4px;">Search Queries That Will Run</div>
+      <div id="query-preview" class="kw-tags"><span class="kw-empty">Fill in brand name and domain above</span></div>
+    </div>
+
+    <!-- Regions -->
+    <div style="margin-top:16px;">
+      <div style="font-size:11px;font-family:var(--mono);color:var(--muted);margin-bottom:8px;letter-spacing:.4px;">Regions</div>
+      <div class="region-list" id="region-list"></div>
+    </div>
+  </div>
+
+  <!-- Run -->
+  <div class="panel" style="padding:14px 20px;">
+    <div class="run-row">
+      <button class="btn btn-primary" id="run-btn" onclick="runScan()">▶ Run Scan</button>
+      <button class="btn btn-secondary" onclick="testConnection()">⚡ Test Connection</button>
+      <button class="btn btn-secondary" onclick="clearAll()">Clear</button>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <div class="spinner" id="spinner"></div>
+        <span id="status-text">Ready</span>
+      </div>
+    </div>
+    <div id="scan-log"></div>
+  </div>
+
+  <!-- Summary -->
+  <div class="summary-grid" id="summary-grid" style="display:none">
+    <div class="stat-card c-red">
+      <div class="stat-num" id="s-critical">0</div>
+      <div class="stat-label">RUNNING ADS</div>
+    </div>
+    <div class="stat-card c-yellow">
+      <div class="stat-num" id="s-high">0</div>
+      <div class="stat-label">CLONE SITES</div>
+    </div>
+    <div class="stat-card c-blue">
+      <div class="stat-num" id="s-squatter">0</div>
+      <div class="stat-label">DOMAIN SQUATTERS</div>
+    </div>
+    <div class="stat-card c-orange">
+      <div class="stat-num" id="s-total">0</div>
+      <div class="stat-label">TOTAL THREATS</div>
+    </div>
+  </div>
+
+  <!-- Results -->
+  <div id="results-area" style="display:none">
+    <div class="results-header">
+      <div class="panel-title" style="margin:0">Threats Found</div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+        <div class="filter-row">
+          <button class="filter-btn active" onclick="setFilter('all',this)">All</button>
+          <button class="filter-btn" onclick="setFilter('sponsored',this)">🔴 Running Ads</button>
+          <button class="filter-btn" onclick="setFilter('clone',this)">🟡 Clones</button>
+          <button class="filter-btn" onclick="setFilter('squatter',this)">🔵 Squatters</button>
+        </div>
+        <button class="btn btn-secondary" onclick="exportCSV()" style="font-size:11px;padding:4px 12px;">⬇ Export CSV</button>
+      </div>
+    </div>
+    <div id="results-list"></div>
+  </div>
+
+</main>
+
+<script>
+// ─── CONFIG ───────────────────────────────────────────────────
+const PROXY = 'https://ad-watch.jennarenas.workers.dev';
+
+const ALL_REGIONS = [
+  { code:'AU',   label:'Australia',   gl:'au', hl:'en', flag:'🇦🇺', location:'Sydney,New South Wales,Australia' },
+  { code:'US',   label:'United States',gl:'us', hl:'en', flag:'🇺🇸', location:'New York,New York,United States' },
+  { code:'GB',   label:'UK',          gl:'gb', hl:'en', flag:'🇬🇧', location:'London,England,United Kingdom' },
+  { code:'NZ',   label:'New Zealand', gl:'nz', hl:'en', flag:'🇳🇿', location:'Auckland,Auckland,New Zealand' },
+  { code:'CA',   label:'Canada',      gl:'ca', hl:'en', flag:'🇨🇦', location:'Toronto,Ontario,Canada' },
+];
+
+// ─── STATE ────────────────────────────────────────────────────
+let activeRegions = new Set(loadJSON('bg_regions', ['AU']));
+let allResults    = [];
+let currentFilter = 'all';
+let expandState   = {};
+
+function loadJSON(k, fb) { try { const v=localStorage.getItem(k); return v?JSON.parse(v):fb; } catch { return fb; } }
+function saveJSON(k, v)  { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} }
+
+// ─── INIT ─────────────────────────────────────────────────────
+function init() {
+  const key = localStorage.getItem('bg_api_key') || '';
+  if (key) {
+    document.getElementById('api-key').value = key;
+    setKeyStatus(`✓ Key saved (${key.length} chars)`, 'var(--green)');
+    fetchCredits(key);
+  }
+  const dom = localStorage.getItem('bg_domain') || '';
+  const brand = localStorage.getItem('bg_brand') || '';
+  const extra = localStorage.getItem('bg_extra') || '';
+  if (dom)   document.getElementById('own-domain').value = dom;
+  if (brand) document.getElementById('brand-name').value = brand;
+  if (extra) document.getElementById('extra-terms').value = extra;
+
+  document.getElementById('own-domain').addEventListener('change', () => {
+    localStorage.setItem('bg_domain', document.getElementById('own-domain').value.trim());
+  });
+  document.getElementById('brand-name').addEventListener('change', () => {
+    localStorage.setItem('bg_brand', document.getElementById('brand-name').value.trim());
+  });
+  document.getElementById('extra-terms').addEventListener('change', () => {
+    localStorage.setItem('bg_extra', document.getElementById('extra-terms').value.trim());
+  });
+  document.getElementById('api-key').addEventListener('keydown', e => { if (e.key==='Enter') saveKey(); });
+
+  renderRegions();
+  generateQueries();
+}
+
+// ─── KEY MANAGEMENT ───────────────────────────────────────────
+function onKeyInput() {
+  const v = document.getElementById('api-key').value.trim();
+  if (v.length > 10) setKeyStatus(`${v.length} chars — click Save`, 'var(--yellow)');
+}
+function saveKey() {
+  const key = document.getElementById('api-key').value.trim();
+  if (!key) { setKeyStatus('✗ Empty — paste your key first', 'var(--red)'); return; }
+  localStorage.removeItem('bg_api_key');
+  localStorage.setItem('bg_api_key', key);
+  setKeyStatus(`✓ Saved (${key.length} chars)`, 'var(--green)');
+  const btn = document.getElementById('save-btn');
+  btn.textContent = '✓'; setTimeout(() => btn.textContent = 'Save', 1500);
+  fetchCredits(key);
+}
+function setKeyStatus(msg, color) {
+  const el = document.getElementById('key-status');
+  el.textContent = msg; el.style.color = color;
+}
+function toggleKey() {
+  const i = document.getElementById('api-key');
+  i.type = i.type === 'password' ? 'text' : 'password';
+}
+
+async function fetchCredits(key) {
+  try {
+    const r = await fetch(`${PROXY}/account?api_key=${key}`);
+    if (!r.ok) return;
+    const d = await r.json();
+    const left = d.plan_searches_left ?? d.searches_left;
+    if (left != null) {
+      const el = document.getElementById('credits-badge');
+      el.textContent = `${left} credits`;
+      el.style.display = '';
+    }
+  } catch {}
+}
+
+// ─── REGIONS ──────────────────────────────────────────────────
+function renderRegions() {
+  document.getElementById('region-list').innerHTML = ALL_REGIONS.map(r => `
+    <button class="region-btn ${activeRegions.has(r.code)?'active':''}" onclick="toggleRegion('${r.code}',this)">
+      ${r.flag} ${r.label}
+    </button>`).join('');
+}
+function toggleRegion(code, btn) {
+  if (activeRegions.has(code)) {
+    if (activeRegions.size === 1) return;
+    activeRegions.delete(code); btn.classList.remove('active');
+  } else {
+    activeRegions.add(code); btn.classList.add('active');
+  }
+  saveJSON('bg_regions', [...activeRegions]);
+}
+
+// ─── QUERY BUILDER ────────────────────────────────────────────
+// Generates the set of searches that will detect clones + squatters + ad hijackers
+function buildQueries() {
+  const domain = document.getElementById('own-domain').value.trim();
+  const brand  = document.getElementById('brand-name').value.trim();
+  const extra  = document.getElementById('extra-terms').value.trim();
+
+  if (!domain && !brand) return [];
+
+  const queries = [];
+  const domainRoot = domain.replace(/^www\./,'').split('.')[0]; // e.g. "archiesfootwear"
+
+  // 1. Brand name search excluding own domain — finds clones in organic + sponsored
+  if (brand) {
+    queries.push({ q: `"${brand}"`, label: `Brand name search`, type: 'brand' });
+    queries.push({ q: `"${brand}" buy`, label: `Brand + buy intent`, type: 'brand' });
+    queries.push({ q: `"${brand}" official site`, label: `Brand + official`, type: 'brand' });
+  }
+
+  // 2. Domain root search — finds typosquatters and copies
+  if (domainRoot && domainRoot.length > 3) {
+    queries.push({ q: domainRoot, label: `Domain root keyword`, type: 'domain' });
+    if (brand && brand.toLowerCase() !== domainRoot.toLowerCase()) {
+      queries.push({ q: `${domainRoot} ${brand}`, label: `Domain + brand combo`, type: 'domain' });
+    }
+  }
+
+  // 3. Extra terms
+  if (extra) {
+    extra.split(',').map(t => t.trim()).filter(Boolean).forEach(term => {
+      queries.push({ q: term, label: `Extra term: ${term}`, type: 'extra' });
+    });
+  }
+
+  return queries;
+}
+
+function generateQueries() {
+  const queries = buildQueries();
+  const el = document.getElementById('query-preview');
+  if (!queries.length) {
+    el.innerHTML = '<span class="kw-empty">Fill in brand name and domain above</span>';
+    return;
+  }
+  el.innerHTML = queries.map(q => `
+    <span class="kw-tag" title="${escHtml(q.label)}">${escHtml(q.q)}</span>
+  `).join('');
+}
+
+// ─── SCAN ─────────────────────────────────────────────────────
+async function runScan() {
+  const apiKey = document.getElementById('api-key').value.trim();
+  if (!apiKey) { alert('Paste your SerpAPI key and click Save first.'); return; }
+  localStorage.setItem('bg_api_key', apiKey);
+
+  const ownDomain  = document.getElementById('own-domain').value.trim().toLowerCase().replace(/^www\./, '');
+  const brandName  = document.getElementById('brand-name').value.trim().toLowerCase();
+  const queries    = buildQueries();
+  const regions    = ALL_REGIONS.filter(r => activeRegions.has(r.code));
+
+  if (!queries.length) { alert('Enter your brand name and/or domain first.'); return; }
+
+  // Save inputs
+  localStorage.setItem('bg_domain', ownDomain);
+  localStorage.setItem('bg_brand', document.getElementById('brand-name').value.trim());
+  localStorage.setItem('bg_extra', document.getElementById('extra-terms').value.trim());
+
+  allResults  = [];
+  expandState = {};
+  setRunning(true);
+  showLog(true);
+  clearLog();
+
+  const combos = queries.flatMap(q => regions.map(r => ({ q, region: r })));
+  log(`Running ${queries.length} search queries × ${regions.length} region(s) = ${combos.length} total requests`, 'info');
+  log(`Your domain (excluded from threats): ${ownDomain || '(not set)'}`, 'info');
+
+  // Track domains we've already found to avoid duplicates
+  const seenDomains = new Set();
+
+  let done = 0;
+  for (const { q, region } of combos) {
+    setStatus(`Query "${q.q}" in ${region.label} (${done+1}/${combos.length})…`);
+    log(`→ ${region.flag} "${q.q}" [${q.label}]`, 'info');
+
+    try {
+      // Run both organic + ads in a single search
+      const params = new URLSearchParams({
+        engine:   'google',
+        q:        q.q,
+        gl:       region.gl,
+        hl:       region.hl,
+        location: region.location,
+        device:   'desktop',
+        no_cache: 'true',
+        api_key:  apiKey,
+      });
+
+      const resp    = await fetch(`${PROXY}/search?${params}`);
+      const rawText = await resp.text();
+
+      if (!resp.ok) {
+        try { const e = JSON.parse(rawText); log(`  ✗ Error ${resp.status}: ${e.error}`, 'err'); }
+        catch { log(`  ✗ HTTP ${resp.status}: ${rawText.slice(0,120)}`, 'err'); }
+        if (resp.status === 401 || resp.status === 403) {
+          log('  ✗ API key rejected — regenerate at serpapi.com/manage-api-key', 'err');
+          setRunning(false); return;
+        }
+        done++; continue;
+      }
+
+      let data;
+      try { data = JSON.parse(rawText); }
+      catch { log(`  ✗ Could not parse response`, 'err'); done++; continue; }
+
+      if (data.error) { log(`  ✗ SerpAPI: ${data.error}`, 'err'); done++; continue; }
+
+      const topKeys = Object.keys(data).filter(k =>
+        !['search_metadata','search_parameters','search_information','serpapi_pagination'].includes(k)
+      );
+      log(`  ↳ Keys: [${topKeys.join(', ')}]`, 'info');
+
+      // ── Collect sponsored ads ─────────────────────────────
+      const sponsoredAds = [
+        ...(data.ads        || []),
+        ...(data.top_ads    || []),
+        ...(data.bottom_ads || []),
+      ];
+
+      let adsFound = 0;
+      for (const ad of sponsoredAds) {
+        const adDomain = extractDomain(ad.displayed_link || ad.link || '');
+        if (!adDomain || isOwnDomain(adDomain, ownDomain)) continue;
+        if (seenDomains.has('ad:' + adDomain + ':' + region.code)) continue;
+        seenDomains.add('ad:' + adDomain + ':' + region.code);
+
+        const threat = analyzeResult({
+          domain:    adDomain,
+          title:     ad.title || '',
+          url:       ad.link || ad.displayed_link || '',
+          snippet:   ad.description || '',
+          position:  ad.position ?? null,
+          isSponsored: true,
+          raw:       ad,
+        }, ownDomain, brandName, q.q, region);
+
+        allResults.push(threat);
+        adsFound++;
+      }
+      if (adsFound > 0) log(`  ✓ ${adsFound} sponsored ad(s) from third parties`, 'ok');
+
+      // ── Collect organic results ───────────────────────────
+      const organic = data.organic_results || [];
+      let organicThreats = 0;
+
+      for (const result of organic) {
+        const resDomain = extractDomain(result.displayed_link || result.link || '');
+        if (!resDomain || isOwnDomain(resDomain, ownDomain)) continue;
+        if (seenDomains.has('org:' + resDomain + ':' + region.code)) continue;
+        seenDomains.add('org:' + resDomain + ':' + region.code);
+
+        const threat = analyzeResult({
+          domain:    resDomain,
+          title:     result.title || '',
+          url:       result.link || '',
+          snippet:   result.snippet || '',
+          position:  result.position ?? null,
+          isSponsored: false,
+          raw:       result,
+        }, ownDomain, brandName, q.q, region);
+
+        // Only include organic results that look like actual threats
+        if (threat.signals.length > 0 && threat.threatScore >= 20) {
+          allResults.push(threat);
+          organicThreats++;
+        }
+      }
+      if (organicThreats > 0) log(`  ✓ ${organicThreats} suspicious organic result(s)`, 'ok');
+      if (adsFound === 0 && organicThreats === 0) log(`  ℹ No threats detected for this query/region`, 'info');
+
+    } catch (e) {
+      log(`  ✗ Network error: ${e.message}`, 'err');
+    }
+
+    done++;
+    await sleep(350);
+  }
+
+  // Deduplicate by domain+region (keep highest threat score)
+  const deduped = deduplicateResults(allResults);
+  allResults = deduped;
+
+  log(`─── Scan complete — ${allResults.length} unique threat(s) found ───`, 'ok');
+  setRunning(false);
+  setStatus(`Done — ${allResults.length} threats`);
+  document.getElementById('last-scan').textContent = `Last scan: ${new Date().toLocaleTimeString()}`;
+  fetchCredits(apiKey);
+  renderResults();
+}
+
+function isOwnDomain(domain, ownDomain) {
+  if (!ownDomain) return false;
+  const own = ownDomain.replace(/^www\./, '').toLowerCase();
+  return domain === own || domain.endsWith('.' + own);
+}
+
+function deduplicateResults(results) {
+  const map = new Map();
+  for (const r of results) {
+    const key = r.domain + ':' + r.region.code;
+    if (!map.has(key) || r.threatScore > map.get(key).threatScore) {
+      map.set(key, r);
+    }
+  }
+  return [...map.values()];
+}
+
+// ─── THREAT ANALYSIS ──────────────────────────────────────────
+function analyzeResult({ domain, title, url, snippet, position, isSponsored, raw }, ownDomain, brandName, query, region) {
+  const signals = [];
+  let score = 0;
+  let threatType = 'organic';
+
+  const titleL   = title.toLowerCase();
+  const snippetL = snippet.toLowerCase();
+  const brand    = brandName.toLowerCase();
+  const domainL  = domain.toLowerCase();
+  const ownRoot  = ownDomain.replace(/^www\./, '').split('.')[0].toLowerCase();
+
+  // ── Sponsored = always a threat ───────────────────────────
+  if (isSponsored) {
+    signals.push({ label: '🔴 Running sponsored ad for your brand keyword', type: 'flag' });
+    score += 80;
+    threatType = 'sponsored';
+  }
+
+  // ── Domain squatting checks ───────────────────────────────
+  if (ownRoot && ownRoot.length > 3) {
+    if (domainL.includes(ownRoot)) {
+      signals.push({ label: `⚠ Domain contains your brand root: "${ownRoot}"`, type: 'flag' });
+      score += 60;
+      if (threatType !== 'sponsored') threatType = 'squatter';
+    } else if (levenshtein(domainL.split('.')[0], ownRoot) <= 2 && Math.abs(domainL.split('.')[0].length - ownRoot.length) <= 3) {
+      signals.push({ label: `⚠ Domain is a near-match typosquat of "${ownRoot}"`, type: 'flag' });
+      score += 55;
+      if (threatType !== 'sponsored') threatType = 'squatter';
+    }
+  }
+
+  // ── Brand name in title/snippet ───────────────────────────
+  if (brand && brand.length > 3) {
+    if (titleL.includes(brand)) {
+      signals.push({ label: `⚠ Uses your brand name in ad/page title`, type: 'flag' });
+      score += 40;
+      if (threatType === 'organic') threatType = 'clone';
+    }
+    if (snippetL.includes(brand)) {
+      signals.push({ label: `ℹ Brand name appears in page description`, type: 'warn' });
+      score += 15;
+    }
+  }
+
+  // ── Deceptive language ────────────────────────────────────
+  const deceptive = ['official', 'official site', 'official store', 'authorized'];
+  if (deceptive.some(w => titleL.includes(w) || snippetL.includes(w))) {
+    signals.push({ label: `⚠ Claims to be "official" or "authorized"`, type: 'flag' });
+    score += 35;
+    if (threatType === 'organic') threatType = 'clone';
+  }
+
+  // ── Selling language ──────────────────────────────────────
+  const selling = ['buy', 'shop', 'order', 'sale', 'discount', 'cheap', 'free shipping'];
+  const sellCount = selling.filter(w => titleL.includes(w) || snippetL.includes(w)).length;
+  if (sellCount >= 2) {
+    signals.push({ label: `ℹ Strong selling signals in content (${sellCount} terms)`, type: 'warn' });
+    score += 15;
+  }
+
+  // ── HTTPS check ───────────────────────────────────────────
+  if (url && !url.startsWith('https')) {
+    signals.push({ label: '✗ No HTTPS', type: 'flag' });
+    score += 10;
+  }
+
+  // ── Position signal ───────────────────────────────────────
+  if (position !== null && position <= 3) {
+    signals.push({ label: `ℹ High visibility — position ${position}`, type: 'warn' });
+    score += 10;
+  }
+
+  // Determine final threat level
+  let threatLevel;
+  if (isSponsored)        threatLevel = 'critical';
+  else if (score >= 60)   threatLevel = 'critical';
+  else if (score >= 30)   threatLevel = 'high';
+  else                    threatLevel = 'low';
+
+  return { domain, title, url, snippet, position, isSponsored, raw, signals, score, threatScore: score, threatType, threatLevel, region, query };
+}
+
+function extractDomain(url) {
+  if (!url) return '';
+  try { return new URL(url.startsWith('http') ? url : 'https://'+url).hostname.replace(/^www\./,'').toLowerCase(); }
+  catch { return url.toLowerCase().split('/')[0].replace(/^www\./, ''); }
+}
+
+function levenshtein(a, b) {
+  const dp = Array.from({length: b.length+1}, (_,i) => i);
+  for (let i = 1; i <= a.length; i++) {
+    let prev = i;
+    for (let j = 1; j <= b.length; j++) {
+      const v = a[i-1]===b[j-1] ? dp[j-1] : 1+Math.min(dp[j-1],dp[j],prev);
+      dp[j-1]=prev; prev=v;
+    }
+    dp[b.length]=prev;
+  }
+  return dp[b.length];
+}
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+// ─── TEST CONNECTION ──────────────────────────────────────────
+async function testConnection() {
+  const key = document.getElementById('api-key').value.trim();
+  if (!key) { alert('Paste your SerpAPI key and click Save first.'); return; }
+  showLog(true); clearLog();
+  log(`Pinging worker: ${PROXY}`, 'info');
+  try {
+    const r    = await fetch(`${PROXY}/account?api_key=${key}`);
+    const text = await r.text();
+    log(`  HTTP ${r.status} — ${text.length} bytes`, r.ok ? 'info' : 'err');
+    if (!r.ok) {
+      log(`  ✗ Response: ${text.slice(0,200)}`, 'err');
+      if (r.status===401||r.status===403) log('  ✗ Key rejected — get a fresh key at serpapi.com/manage-api-key', 'err');
+      return;
+    }
+    const d = JSON.parse(text);
+    log(`  ✓ Connected — account: ${d.account_email||d.email||'(unknown)'}`, 'ok');
+    log(`  Plan: ${d.plan_name||'unknown'} | Credits: ${d.plan_searches_left??d.searches_left??'?'}`, 'ok');
+
+    // Quick search test
+    log(`Running quick test search…`, 'info');
+    const params = new URLSearchParams({ engine:'google', q:'test', gl:'au', hl:'en', device:'desktop', no_cache:'true', api_key:key });
+    const r2 = await fetch(`${PROXY}/search?${params}`);
+    const t2 = await r2.text();
+    log(`  HTTP ${r2.status} — ${t2.length} bytes`, r2.ok ? 'info' : 'err');
+    if (r2.ok) {
+      const d2 = JSON.parse(t2);
+      const ads = [...(d2.ads||[]),...(d2.top_ads||[]),...(d2.bottom_ads||[])];
+      const keys = Object.keys(d2).filter(k=>!['search_metadata','search_parameters','search_information'].includes(k));
+      log(`  Response keys: [${keys.join(', ')}]`, 'info');
+      log(`  Ads found: ${ads.length} | Organic: ${(d2.organic_results||[]).length}`, ads.length>0?'ok':'warn');
+      log(`  ✓ Pipeline working — run your scan!`, 'ok');
+    } else {
+      log(`  ✗ Search failed: ${t2.slice(0,200)}`, 'err');
+    }
+  } catch(e) {
+    log(`  ✗ Could not reach worker: ${e.message}`, 'err');
+  }
+}
+
+// ─── RENDER ───────────────────────────────────────────────────
+function renderResults() {
+  const sponsored = allResults.filter(r => r.isSponsored).length;
+  const clones    = allResults.filter(r => r.threatType === 'clone' && !r.isSponsored).length;
+  const squatters = allResults.filter(r => r.threatType === 'squatter' && !r.isSponsored).length;
+
+  document.getElementById('s-critical').textContent = sponsored;
+  document.getElementById('s-high').textContent     = clones;
+  document.getElementById('s-squatter').textContent = squatters;
+  document.getElementById('s-total').textContent    = allResults.length;
+  document.getElementById('summary-grid').style.display = '';
+  document.getElementById('results-area').style.display = '';
+  renderList();
+}
+
+function renderList() {
+  const list = document.getElementById('results-list');
+  let filtered = allResults;
+  if (currentFilter === 'sponsored') filtered = allResults.filter(r => r.isSponsored);
+  else if (currentFilter === 'clone') filtered = allResults.filter(r => r.threatType==='clone' && !r.isSponsored);
+  else if (currentFilter === 'squatter') filtered = allResults.filter(r => r.threatType==='squatter');
+
+  if (!filtered.length) {
+    list.innerHTML = `<div class="empty-state"><div class="empty-icon">🔍</div>No results match this filter.</div>`;
+    return;
+  }
+
+  const sorted = [...filtered].sort((a,b) => b.threatScore - a.threatScore);
+  list.innerHTML = sorted.map((r,i) => buildCard(r,i)).join('');
+}
+
+function buildCard(r, idx) {
+  const typeLabel  = r.isSponsored ? '🔴 Sponsored Ad' : r.threatType === 'squatter' ? '🔵 Domain Squatter' : '🟡 Clone Site';
+  const badgeClass = r.isSponsored ? 'badge-sponsored' : r.threatType === 'squatter' ? 'badge-squatter' : 'badge-clone';
+
+  return `
+  <div class="result-card threat-${r.threatLevel}">
+    <div class="card-head">
+      <div class="card-head-left">
+        <div class="card-site-name">${escHtml(r.title || r.domain)}</div>
+        <div class="card-url"><a href="${escHtml(r.url||'#')}" target="_blank" rel="noopener">${escHtml(r.domain)}</a></div>
+      </div>
+      <div class="badge-row">
+        ${r.position!=null ? `<span class="badge badge-pos">Pos ${r.position}</span>` : ''}
+        <span class="badge badge-region">${r.region.flag} ${r.region.code}</span>
+        <span class="badge ${badgeClass}">${typeLabel}</span>
+      </div>
+    </div>
+    ${r.snippet ? `<div class="card-snippet">${escHtml(r.snippet)}</div>` : ''}
+    ${r.signals.length ? `
+    <div class="card-signals">
+      ${r.signals.map(s=>`<span class="signal ${s.type}">${s.label}</span>`).join('')}
+    </div>` : ''}
+    <div class="card-expand-row">
+      <button class="expand-tab" onclick="toggleTab(${idx},'raw',this)">{ } Raw Data</button>
+    </div>
+    <div class="expand-body" id="exp-${idx}-raw">
+      <div class="raw-source">${escHtml(JSON.stringify(r.raw, null, 2))}</div>
+    </div>
+  </div>`;
+}
+
+function toggleTab(idx, tab, btn) {
+  const body = document.getElementById(`exp-${idx}-${tab}`);
+  if (!body) return;
+  const card = btn.closest('.result-card');
+  card.querySelectorAll('.expand-body').forEach(el => el.classList.remove('visible'));
+  card.querySelectorAll('.expand-tab').forEach(el => el.classList.remove('open'));
+  const key = `${idx}-${tab}`;
+  if (expandState[key]) { delete expandState[key]; }
+  else { expandState[key]=true; body.classList.add('visible'); btn.classList.add('open'); }
+}
+
+function setFilter(f, btn) {
+  currentFilter = f;
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderList();
+}
+
+function clearAll() {
+  allResults=[]; expandState={}; currentFilter='all';
+  document.getElementById('summary-grid').style.display='none';
+  document.getElementById('results-area').style.display='none';
+  document.getElementById('scan-log').style.display='none';
+  setStatus('Ready');
+}
+
+// ─── EXPORT ───────────────────────────────────────────────────
+function exportCSV() {
+  if (!allResults.length) { alert('No results to export.'); return; }
+  const cols = ['domain','threat_type','is_sponsored','region','position','threat_score','title','url','snippet','signals'];
+  const esc  = v => `"${String(v??'').replace(/"/g,'""')}"`;
+  const rows = allResults.map(r => [
+    r.domain, r.threatType, r.isSponsored, r.region.code, r.position??'',
+    r.threatScore, r.title, r.url, r.snippet,
+    r.signals.map(s=>s.label).join(' | ')
+  ].map(esc).join(','));
+  const csv  = [cols.join(','),...rows].join('\n');
+  const a    = Object.assign(document.createElement('a'), {
+    href: URL.createObjectURL(new Blob([csv],{type:'text/csv'})),
+    download: `brandguard-${new Date().toISOString().slice(0,10)}.csv`
+  });
+  a.click(); URL.revokeObjectURL(a.href);
+}
+
+// ─── HELPERS ──────────────────────────────────────────────────
+function setRunning(on) {
+  document.getElementById('run-btn').disabled      = on;
+  document.getElementById('spinner').style.display = on?'':'none';
+}
+function setStatus(msg) { document.getElementById('status-text').textContent = msg; }
+function showLog(on)    { document.getElementById('scan-log').style.display = on?'':'none'; }
+function clearLog()     { document.getElementById('scan-log').innerHTML = ''; }
+function log(msg, type='') {
+  const el=document.getElementById('scan-log');
+  const cls={err:'log-err',ok:'log-ok',info:'log-info',warn:'log-warn'}[type]||'';
+  el.innerHTML += `<div class="${cls}">${escHtml(msg)}</div>`;
+  el.scrollTop=el.scrollHeight;
+  if (el.style.display==='none') el.style.display='';
+}
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+init();
+</script>
+</body>
+</html>
