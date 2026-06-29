@@ -657,6 +657,25 @@
   ::-webkit-scrollbar { width: 5px; height: 5px; }
   ::-webkit-scrollbar-track { background: var(--bg); }
   ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+  /* Source row chips */
+  .ad-source-row {
+    display: flex;
+    gap: 5px;
+    margin-top: 3px;
+    flex-wrap: wrap;
+  }
+  .src-chip {
+    font-family: var(--mono);
+    font-size: 9px;
+    font-weight: 600;
+    padding: 2px 7px;
+    border-radius: 4px;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+  }
+  .src-type   { background: #1a2340; color: #7ca8e0; border: 1px solid #1e3a5f; }
+  .src-domain { background: #1a2820; color: #6db88a; border: 1px solid #153d1a; font-text-transform: none; }
 </style>
 </head>
 <body>
@@ -760,11 +779,14 @@
   <div id="results-area" style="display:none">
     <div class="results-header" style="margin-bottom:12px;">
       <div class="panel-title" style="margin:0;">Scan Results</div>
-      <div class="filter-row">
-        <button class="filter-btn active" onclick="setFilter('all',this)">All</button>
-        <button class="filter-btn" onclick="setFilter('high',this)">🔴 High Risk</button>
-        <button class="filter-btn" onclick="setFilter('medium',this)">🟡 Medium</button>
-        <button class="filter-btn" onclick="setFilter('low',this)">🟢 Legit</button>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+        <div class="filter-row">
+          <button class="filter-btn active" onclick="setFilter('all',this)">All</button>
+          <button class="filter-btn" onclick="setFilter('high',this)">🔴 High Risk</button>
+          <button class="filter-btn" onclick="setFilter('medium',this)">🟡 Medium</button>
+          <button class="filter-btn" onclick="setFilter('low',this)">🟢 Legit</button>
+        </div>
+        <button class="btn-outline" onclick="exportCSV()" style="font-size:11px;padding:5px 13px;">⬇ Export CSV</button>
       </div>
     </div>
     <div id="results-list"></div>
@@ -1078,6 +1100,7 @@ async function runScan() {
         hl:       region.hl,
         location: region.location,
         device:   'desktop',
+        num:      '10',
         api_key:  apiKey,
       });
       const url = `https://serpapi.com/search.json?${params}`;
@@ -1132,6 +1155,9 @@ async function runScan() {
             trackingUrl: ad.tracking_link || '',
             description: ad.description || '',
             position:    ad.position ?? null,
+            adType:      ad.ad_type || ad.type || 'search',
+            trafficSource: ad.traffic_source || extractDomain(ad.link || ''),
+            sourceDomain:  extractDomain(ad.displayed_link || ad.link || ''),
             sitelinks:   [...(ad.sitelinks?.inline || []), ...(ad.sitelinks?.block || [])],
             extensions:  extractExtensions(ad),
             raw:         ad,
@@ -1177,6 +1203,11 @@ function extractExtensions(ad) {
 }
 
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+// ─────────────────────────────────────────────────────────────
+// TEST API KEY
+// ─────────────────────────────────────────────────────────────
+async function testApiKey() {
   const apiKey = document.getElementById('api-key').value.trim();
   if (!apiKey) { alert('Paste your SerpAPI key first.'); return; }
 
@@ -1217,9 +1248,7 @@ function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
   } catch(e) {
     log(`✗ Network error: ${e.message}`, 'err');
   }
-}
-
-
+}  // end testApiKey
 
 // ─────────────────────────────────────────────────────────────
 // RENDER
@@ -1300,6 +1329,10 @@ function buildCard(r, idx) {
         <div class="ad-display-url">${escHtml(r.displayUrl)}</div>
         ${r.landingUrl ? `<div class="ad-landing-url">↳ <a href="${escHtml(r.landingUrl)}" target="_blank" rel="noopener">${escHtml(r.landingUrl)}</a></div>` : ''}
         ${r.trackingUrl && r.trackingUrl !== r.landingUrl ? `<div class="ad-landing-url" style="color:#4a5568">⟳ ${escHtml(r.trackingUrl)}</div>` : ''}
+        <div class="ad-source-row">
+          ${r.adType && r.adType !== 'search' ? `<span class="src-chip src-type">${escHtml(r.adType)}</span>` : '<span class="src-chip src-type">search</span>'}
+          ${r.sourceDomain ? `<span class="src-chip src-domain">🌐 ${escHtml(r.sourceDomain)}</span>` : ''}
+        </div>
       </div>
       <div class="badge-row">
         ${r.position !== null ? `<span class="badge badge-pos">Pos ${r.position}</span>` : ''}
@@ -1382,6 +1415,38 @@ function escHtml(s) {
   return String(s)
     .replace(/&/g,'&amp;').replace(/</g,'&lt;')
     .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ─────────────────────────────────────────────────────────────
+// EXPORT CSV
+// ─────────────────────────────────────────────────────────────
+function exportCSV() {
+  if (!allResults.length) { alert('No results to export.'); return; }
+  const cols = ['keyword','region','position','risk','score','ad_type','source_domain',
+                'title','display_url','landing_url','tracking_url','description','signals'];
+  const esc = v => `"${String(v ?? '').replace(/"/g,'""')}"`;
+  const rows = allResults.map(r => [
+    r.keyword,
+    r.region.code,
+    r.position ?? '',
+    r.risk,
+    r.score,
+    r.adType,
+    r.sourceDomain,
+    r.title,
+    r.displayUrl,
+    r.landingUrl,
+    r.trackingUrl,
+    r.description,
+    r.signals.map(s => s.label).join(' | '),
+  ].map(esc).join(','));
+  const csv = [cols.join(','), ...rows].join('\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `adwatch-${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(a.href);
 }
 
 init();
